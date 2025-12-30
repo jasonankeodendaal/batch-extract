@@ -1,5 +1,5 @@
 
-import React, { useState, useRef, useMemo } from 'react';
+import React, { useState, useRef, useMemo, useEffect } from 'react';
 import * as pdfjs from 'pdfjs-dist';
 import { 
   Upload, 
@@ -15,7 +15,7 @@ import {
   ArrowUpDown,
   Zap as ZapIcon,
   Cloud,
-  Cpu,
+  Cpu, 
   ShieldCheck,
   Plus,
   ArrowRight,
@@ -25,7 +25,9 @@ import {
   Key,
   Github,
   ExternalLink,
-  Monitor
+  Monitor,
+  AlertCircle,
+  Lock
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { extractProductsFromImage, normalizeProductData } from './services/geminiService';
@@ -34,6 +36,19 @@ import PlexusBackground from './PlexusBackground';
 
 // Ensure the worker is properly loaded from unpkg
 pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
+
+// Extension for window for type safety
+// Fix: Use the expected global AIStudio type and ensure optionality matches existing declarations
+interface AIStudio {
+  hasSelectedApiKey: () => Promise<boolean>;
+  openSelectKey: () => Promise<void>;
+}
+
+declare global {
+  interface Window {
+    aistudio?: AIStudio;
+  }
+}
 
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'main' | 'about'>('main');
@@ -44,9 +59,37 @@ const App: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [sortConfig, setSortConfig] = useState<{ key: keyof Product; direction: 'asc' | 'desc' } | null>(null);
+  const [isKeySelected, setIsKeySelected] = useState<boolean>(true); // Default true to check on mount
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const abortIdRef = useRef<number>(0);
+
+  useEffect(() => {
+    checkApiKeyStatus();
+  }, []);
+
+  const checkApiKeyStatus = async () => {
+    if (window.aistudio) {
+      try {
+        const hasKey = await window.aistudio.hasSelectedApiKey();
+        setIsKeySelected(hasKey);
+      } catch (err) {
+        console.error("Failed to check API key status", err);
+      }
+    }
+  };
+
+  const handleOpenKeySelector = async () => {
+    if (window.aistudio) {
+      try {
+        await window.aistudio.openSelectKey();
+        setIsKeySelected(true); // Assume success per instructions
+        setErrorMessage(null);
+      } catch (err) {
+        console.error("Failed to open key selector", err);
+      }
+    }
+  };
 
   const cleanPrice = (price: string | undefined): string => {
     if (!price) return '';
@@ -102,6 +145,12 @@ const App: React.FC = () => {
   const processAllFiles = async () => {
     if (files.length === 0 || status === ExtractionStatus.PROCESSING) return;
     
+    // Safety check for API key
+    if (!isKeySelected && window.aistudio) {
+      setErrorMessage("API Key Required: Please authorize access to continue.");
+      return;
+    }
+
     const currentAbortId = abortIdRef.current;
     setStatus(ExtractionStatus.PROCESSING);
     setErrorMessage(null);
@@ -126,7 +175,6 @@ const App: React.FC = () => {
               if (abortIdRef.current !== currentAbortId) return;
               
               const page = await pdf.getPage(i);
-              // Scale 2.0 is usually balanced for high OCR quality and performance
               const viewport = page.getViewport({ scale: 2.0 }); 
               const canvas = document.createElement('canvas');
               const context = canvas.getContext('2d');
@@ -188,8 +236,15 @@ const App: React.FC = () => {
             setFiles(prev => prev.map(f => f.id === processingFile.id ? { ...f, status: 'completed', progress: 100, extractedCount: allExtracted.length } : f));
           }
         } catch (err: any) {
-          console.error(`Error processing ${processingFile.file.name}:`, err);
-          setFiles(prev => prev.map(f => f.id === processingFile.id ? { ...f, status: 'error', error: 'Extraction Failure' } : f));
+          const errMsg = err?.message || "Extraction Failure";
+          console.error(`Error processing ${processingFile.file.name}:`, errMsg);
+          
+          if (errMsg.includes("API Key") || errMsg.includes("Requested entity was not found")) {
+            setIsKeySelected(false);
+            setErrorMessage("API Key Required or Invalid. Please authorize and try again.");
+          }
+          
+          setFiles(prev => prev.map(f => f.id === processingFile.id ? { ...f, status: 'error', error: errMsg } : f));
         }
       }
       
@@ -258,6 +313,35 @@ const App: React.FC = () => {
   return (
     <div className="min-h-screen bg-[#020305] text-slate-300 antialiased font-sans selection:bg-blue-600/30 overflow-hidden">
       <PlexusBackground isProcessing={status === ExtractionStatus.PROCESSING} />
+
+      {!isKeySelected && (
+        <div className="fixed inset-0 z-[200] bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-300">
+          <div className="max-w-md w-full bg-[#0b0e14] border border-blue-500/20 rounded-[2.5rem] p-10 shadow-2xl text-center relative overflow-hidden">
+            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-32 h-32 bg-blue-600/10 blur-[60px] rounded-full"></div>
+            <div className="w-20 h-20 bg-blue-600/10 border border-blue-500/20 rounded-3xl flex items-center justify-center mx-auto mb-8 text-blue-500">
+              <Lock className="w-10 h-10" />
+            </div>
+            <h2 className="text-3xl font-black text-white italic tracking-tighter uppercase mb-4">Neural Access Locked</h2>
+            <p className="text-slate-400 text-sm font-medium italic mb-8 leading-relaxed">
+              To utilize the high-speed extraction engine, you must authorize a Gemini API key from your Google Cloud project.
+            </p>
+            <button 
+              onClick={handleOpenKeySelector}
+              className="w-full py-5 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl font-black text-xs uppercase tracking-[0.2em] transition-all shadow-[0_0_30px_rgba(37,99,235,0.3)] active:scale-95 flex items-center justify-center gap-3 mb-6"
+            >
+              Authorize Neural Engine <ArrowRight className="w-4 h-4" />
+            </button>
+            <a 
+              href="https://ai.google.dev/gemini-api/docs/billing" 
+              target="_blank" 
+              rel="noreferrer"
+              className="text-[10px] font-black text-slate-500 hover:text-blue-400 uppercase tracking-widest transition-colors flex items-center justify-center gap-2"
+            >
+              Billing Documentation <ExternalLink className="w-3 h-3" />
+            </a>
+          </div>
+        </div>
+      )}
 
       <nav className="fixed top-0 left-0 right-0 h-14 border-b border-white/[0.03] bg-[#020305]/80 backdrop-blur-3xl z-[100] px-4">
         <div className="max-w-[120rem] mx-auto h-full flex items-center justify-between">
@@ -359,7 +443,12 @@ const App: React.FC = () => {
                             <div className="h-full bg-blue-500 transition-all duration-500" style={{ width: `${f.progress}%` }} />
                           </div>
                         )}
-                        {f.status === 'error' && <p className="text-[7px] text-red-500 font-bold uppercase mt-1">Error: {f.error}</p>}
+                        {f.status === 'error' && (
+                          <div className="flex items-start gap-1 mt-1">
+                             <AlertCircle className="w-2.5 h-2.5 text-red-500 mt-0.5 shrink-0" />
+                             <p className="text-[7px] text-red-500 font-bold uppercase line-clamp-2">{f.error}</p>
+                          </div>
+                        )}
                         {f.status === 'completed' && <p className="text-[7px] text-emerald-500 font-bold uppercase mt-1">{f.extractedCount} items found</p>}
                       </div>
                     ))}
@@ -374,7 +463,19 @@ const App: React.FC = () => {
                       {status === ExtractionStatus.PROCESSING ? <Loader2 className="w-3 h-3 animate-spin" /> : <ZapIcon className="w-3 h-3" />}
                       {status === ExtractionStatus.PROCESSING ? 'Processing PDF...' : 'Convert to Excel'}
                     </button>
-                    {errorMessage && <p className="mt-2 text-[8px] text-red-400 font-black uppercase text-center bg-red-500/10 py-1.5 rounded-md px-2 leading-tight">{errorMessage}</p>}
+                    {errorMessage && (
+                      <div className="mt-2 p-2 bg-red-500/10 border border-red-500/20 rounded-lg flex flex-col items-center gap-2">
+                        <p className="text-[8px] text-red-400 font-black uppercase text-center leading-tight">{errorMessage}</p>
+                        {errorMessage.includes("Key") && (
+                          <button 
+                            onClick={handleOpenKeySelector}
+                            className="text-[8px] font-black text-white bg-red-600 hover:bg-red-500 px-3 py-1 rounded-md uppercase tracking-wider transition-all"
+                          >
+                            Re-Authorize Key
+                          </button>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>

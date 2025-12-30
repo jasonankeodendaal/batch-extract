@@ -48,6 +48,10 @@ export async function extractProductsFromImage(
   const model = "gemini-3-flash-preview";
   const MAX_RETRIES = 2;
   
+  if (!process.env.API_KEY) {
+    throw new Error("API Key is missing. Access to neural engine denied.");
+  }
+
   // Directly use process.env.API_KEY as per guidelines
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   
@@ -109,6 +113,11 @@ export async function normalizeProductData(
 ): Promise<Partial<Product>[]> {
   const model = "gemini-3-flash-preview"; 
   const MAX_RETRIES = 2;
+  
+  if (!process.env.API_KEY) {
+    throw new Error("API Key is missing. Access denied.");
+  }
+
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
   try {
