@@ -11,49 +11,30 @@ import {
   LayoutGrid, 
   List, 
   Zap, 
-  Cpu, 
   Database, 
   RefreshCw, 
   AlignLeft, 
-  Activity, 
   Terminal as TerminalIcon, 
   Triangle, 
   Search,
   CheckSquare,
   Square,
   ArrowUpDown,
-  FileJson,
   Layers,
   Zap as ZapIcon,
-  Brain,
-  ChevronRight,
-  ShieldCheck,
-  Lock,
-  HardDrive,
-  Settings,
-  Github,
   Cloud,
-  ClipboardCheck,
   Code,
-  Terminal,
-  BookOpen,
-  Fingerprint,
   Monitor,
-  Box,
-  Globe,
-  Database as DbIcon,
-  Cpu as CpuIcon,
   Key,
-  Server,
-  Workflow,
-  Shield,
-  FileCode,
-  AlertCircle,
+  Github,
   ExternalLink,
-  Info,
-  Check,
-  Copy,
-  Plus
+  Plus,
+  ArrowRight,
+  Globe,
+  ShieldCheck,
+  Cpu,
+  Server,
+  Workflow
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { extractProductsFromImage, normalizeProductData } from './services/geminiService';
@@ -127,11 +108,6 @@ const App: React.FC = () => {
   const selectAll = () => {
     if (selectedIds.size === filteredProducts.length) setSelectedIds(new Set());
     else setSelectedIds(new Set(filteredProducts.map(p => p.id)));
-  };
-
-  const deleteSelected = () => {
-    setExtractedProducts(prev => prev.filter(p => !selectedIds.has(p.id)));
-    setSelectedIds(new Set());
   };
 
   const processAllFiles = async () => {
@@ -212,7 +188,7 @@ const App: React.FC = () => {
         }
       } catch (err: any) {
         if (err.message?.includes("quota") || err.status === 429) {
-          setErrorMessage("Rate Limit or API Error. Try adding more keys in deployment.");
+          setErrorMessage("Cloud Cluster Rate Limit. Use Vercel Secrets to add more keys.");
           setStatus(ExtractionStatus.IDLE);
           isProcessingRef.current = false;
           return;
@@ -274,26 +250,21 @@ const App: React.FC = () => {
     setSortConfig({ key, direction });
   };
 
-  const [copyStatus, setCopyStatus] = useState<string | null>(null);
-  const copyToClipboard = (text: string, label: string) => {
-    navigator.clipboard.writeText(text);
-    setCopyStatus(label);
-    setTimeout(() => setCopyStatus(null), 2000);
-  };
-
   return (
     <div className="min-h-screen bg-[#020305] text-slate-300 antialiased font-sans selection:bg-blue-600/30 overflow-hidden">
       <PlexusBackground isProcessing={status === ExtractionStatus.PROCESSING} />
 
-      <nav className="fixed top-0 left-0 right-0 h-14 border-b border-white/[0.03] bg-[#020305]/60 backdrop-blur-3xl z-[100] px-4">
+      <nav className="fixed top-0 left-0 right-0 h-14 border-b border-white/[0.03] bg-[#020305]/80 backdrop-blur-3xl z-[100] px-4">
         <div className="max-w-[120rem] mx-auto h-full flex items-center justify-between">
           <div className="flex items-center gap-3">
              <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-blue-700 to-blue-500 flex items-center justify-center shadow-[0_0_15px_rgba(37,99,235,0.3)]">
-                <AlignLeft className="w-5 h-5 text-white" />
+                <Globe className="w-5 h-5 text-white" />
              </div>
              <div className="flex flex-col">
-               <span className="text-lg font-black text-white tracking-tighter uppercase leading-none italic">Batch<span className="text-blue-500">Extract</span></span>
-               <span className="text-[7px] font-black text-slate-600 uppercase tracking-widest mt-0.5">Neural Cluster V3.5</span>
+               <span className="text-lg font-black text-white tracking-tighter uppercase leading-none italic">Batch<span className="text-blue-500">Cloud</span></span>
+               <span className="text-[7px] font-black text-slate-600 uppercase tracking-widest mt-0.5 flex items-center gap-1">
+                 <Server className="w-2 h-2 text-emerald-500" /> Web Instance Stable
+               </span>
              </div>
           </div>
           
@@ -302,22 +273,22 @@ const App: React.FC = () => {
               onClick={() => setActiveTab('main')}
               className={`px-6 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all flex items-center gap-2 ${activeTab === 'main' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
             >
-              <TerminalIcon className="w-3 h-3" />
-              Terminal
+              <ZapIcon className="w-3 h-3" />
+              Extractor
             </button>
             <button 
               onClick={() => setActiveTab('about')}
               className={`px-6 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all flex items-center gap-2 ${activeTab === 'about' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
             >
               <Cloud className="w-3 h-3" />
-              Deploy Docs
+              Cloud Setup
             </button>
           </div>
 
           <div className="flex items-center gap-4">
              <button onClick={resetTerminal} className="p-2 bg-slate-900/40 hover:bg-red-500/10 text-slate-500 hover:text-red-400 rounded-lg border border-white/[0.03] hover:border-red-500/20 transition-all flex items-center gap-2 group">
                 <RefreshCw className="w-3.5 h-3.5 group-hover:rotate-180 transition-transform duration-500" />
-                <span className="text-[8px] font-black uppercase tracking-widest">Clear</span>
+                <span className="text-[8px] font-black uppercase tracking-widest">Reset</span>
              </button>
           </div>
         </div>
@@ -328,13 +299,13 @@ const App: React.FC = () => {
           <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 flex flex-col gap-4 h-full">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 shrink-0">
                {[
-                 { label: "Extraction", val: status === ExtractionStatus.PROCESSING ? "Active" : "Idle", icon: <Zap className="text-yellow-500" />, color: "text-blue-400" },
-                 { label: "Database", val: extractedProducts.length, icon: <Database className="text-blue-500" />, color: "text-blue-400" },
-                 { label: "Queue", val: files.length, icon: <FileText className="text-purple-500" />, color: "text-blue-400" },
-                 { label: "Cluster Status", val: "Optimized", icon: <Layers className="text-emerald-500" />, color: "text-blue-400" }
+                 { label: "Cloud Engine", val: status === ExtractionStatus.PROCESSING ? "Active" : "Online", icon: <Cpu className="text-blue-500" /> },
+                 { label: "Extracted", val: extractedProducts.length, icon: <Database className="text-purple-500" /> },
+                 { label: "Assets", val: files.length, icon: <FileText className="text-yellow-500" /> },
+                 { label: "Privacy", val: "End-to-End", icon: <ShieldCheck className="text-emerald-500" /> }
                ].map((stat, i) => (
-                 <div key={i} className="bg-white/[0.01] border border-white/[0.03] rounded-2xl p-3 flex items-center gap-4 group hover:bg-white/[0.02] transition-all">
-                    <div className="w-10 h-10 rounded-xl bg-slate-900/50 border border-white/[0.03] flex items-center justify-center group-hover:scale-105 transition-transform">
+                 <div key={i} className="bg-[#0b0e14]/60 border border-white/[0.03] rounded-2xl p-3 flex items-center gap-4 hover:bg-white/[0.02] transition-all">
+                    <div className="w-10 h-10 rounded-xl bg-slate-900/50 border border-white/[0.03] flex items-center justify-center">
                        {React.cloneElement(stat.icon as React.ReactElement<any>, { className: 'w-5 h-5' })}
                     </div>
                     <div>
@@ -347,25 +318,26 @@ const App: React.FC = () => {
 
             <div className="flex-1 flex flex-col lg:flex-row gap-4 overflow-hidden mb-2">
               <div className="lg:w-72 flex flex-col gap-4 shrink-0 overflow-hidden">
-                <div className="bg-[#0b0e14]/40 border border-white/[0.03] rounded-3xl p-4 flex flex-col shadow-2xl overflow-hidden backdrop-blur-3xl h-full">
+                <div className="bg-[#0b0e14]/60 border border-white/[0.03] rounded-3xl p-4 flex flex-col shadow-2xl overflow-hidden backdrop-blur-3xl h-full">
                   <h2 className="text-[9px] font-black text-white uppercase tracking-widest italic flex items-center gap-2 mb-4">
-                    <Upload className="w-3 h-3 text-blue-500" /> Ingestion Queue
+                    <Upload className="w-3 h-3 text-blue-500" /> Asset Ingestion
                   </h2>
 
                   <div 
                     onClick={() => fileInputRef.current?.click()} 
-                    className="border border-dashed border-white/[0.05] rounded-2xl p-4 text-center hover:border-blue-500/50 hover:bg-blue-500/5 transition-all cursor-pointer group relative"
+                    className="border border-dashed border-white/[0.08] rounded-2xl p-6 text-center hover:border-blue-500/50 hover:bg-blue-500/5 transition-all cursor-pointer group relative"
                   >
                     <input type="file" ref={fileInputRef} onChange={onFileChange} className="hidden" multiple accept=".pdf,.xlsx,.xls,.csv" />
                     <div className="w-10 h-10 bg-slate-900 rounded-xl flex items-center justify-center mx-auto mb-2 border border-white/[0.03] group-hover:scale-110 transition-all">
                       <Plus className="w-5 h-5 text-blue-500" />
                     </div>
-                    <p className="text-[9px] font-black text-white tracking-tight uppercase">Upload Assets</p>
+                    <p className="text-[9px] font-black text-white tracking-tight uppercase">Upload PDF / Excel</p>
+                    <p className="text-[7px] text-slate-500 mt-1 uppercase font-bold">Cloud processing ready</p>
                   </div>
 
                   <div className="mt-4 flex-1 overflow-y-auto pr-1 custom-scrollbar space-y-2">
                     {files.map(f => (
-                      <div key={f.id} className={`p-3 rounded-xl border transition-all duration-300 ${f.status === 'processing' ? 'bg-blue-600/5 border-blue-500/30' : 'bg-white/[0.01] border-white/[0.03]'}`}>
+                      <div key={f.id} className={`p-3 rounded-xl border transition-all duration-300 ${f.status === 'processing' ? 'bg-blue-600/10 border-blue-500/30' : 'bg-white/[0.01] border-white/[0.03]'}`}>
                         <div className="flex items-center justify-between gap-2 overflow-hidden">
                            <div className="flex items-center gap-2 min-w-0">
                              <FileText className={`w-3.5 h-3.5 shrink-0 ${f.status === 'completed' ? 'text-emerald-500' : 'text-slate-500'}`} />
@@ -379,7 +351,7 @@ const App: React.FC = () => {
                         </div>
                         {f.status === 'processing' && (
                           <div className="h-0.5 bg-slate-800 rounded-full mt-2 overflow-hidden">
-                            <div className="h-full bg-blue-500" style={{ width: `${f.progress}%` }} />
+                            <div className="h-full bg-blue-500 animate-pulse" style={{ width: `${f.progress}%` }} />
                           </div>
                         )}
                       </div>
@@ -390,32 +362,28 @@ const App: React.FC = () => {
                     <button 
                       onClick={processAllFiles} 
                       disabled={files.length === 0 || status === ExtractionStatus.PROCESSING} 
-                      className={`w-full py-3 rounded-xl font-black text-[9px] uppercase tracking-widest transition-all flex items-center justify-center gap-2 shadow-xl active:scale-95 ${status === ExtractionStatus.PROCESSING ? 'bg-blue-600 text-white animate-pulse' : 'bg-white text-black hover:bg-blue-500 hover:text-white disabled:bg-slate-900 disabled:text-slate-700'}`}
+                      className={`w-full py-3.5 rounded-xl font-black text-[9px] uppercase tracking-widest transition-all flex items-center justify-center gap-2 shadow-xl active:scale-95 ${status === ExtractionStatus.PROCESSING ? 'bg-blue-600 text-white animate-pulse' : 'bg-white text-black hover:bg-blue-500 hover:text-white disabled:bg-slate-900 disabled:text-slate-700'}`}
                     >
                       {status === ExtractionStatus.PROCESSING ? <Loader2 className="w-3 h-3 animate-spin" /> : <ZapIcon className="w-3 h-3" />}
-                      {status === ExtractionStatus.PROCESSING ? 'Processing' : 'Initialize'}
+                      {status === ExtractionStatus.PROCESSING ? 'Cloud Processing...' : 'Start Extraction'}
                     </button>
-                    {errorMessage && <p className="mt-2 text-[8px] text-red-500 font-black uppercase text-center">{errorMessage}</p>}
+                    {errorMessage && <p className="mt-2 text-[8px] text-red-500 font-black uppercase text-center bg-red-500/10 py-1 rounded-md">{errorMessage}</p>}
                   </div>
                 </div>
               </div>
 
-              <div className="flex-1 flex flex-col bg-[#0b0e14]/40 border border-white/[0.03] rounded-3xl shadow-2xl overflow-hidden backdrop-blur-3xl min-h-0">
+              <div className="flex-1 flex flex-col bg-[#0b0e14]/60 border border-white/[0.03] rounded-3xl shadow-2xl overflow-hidden backdrop-blur-3xl min-h-0">
                 <div className="p-3 border-b border-white/[0.03] flex items-center justify-between gap-4 shrink-0">
                    <div className="flex items-center gap-4 flex-1">
                       <div className="relative flex-1 max-w-sm group">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-600 group-focus-within:text-blue-500 transition-colors" />
                         <input 
                           type="text" 
-                          placeholder="Search Extracted Matrix..." 
+                          placeholder="Search database..." 
                           value={searchQuery}
                           onChange={(e) => setSearchQuery(e.target.value)}
                           className="w-full bg-slate-900/50 border border-white/[0.03] rounded-xl py-2 pl-9 pr-3 text-[10px] font-bold text-white placeholder:text-slate-700 focus:outline-none focus:border-blue-500/30 transition-all"
                         />
-                      </div>
-                      <div className="flex bg-slate-900 p-0.5 rounded-lg border border-white/[0.03] shrink-0">
-                        <button onClick={() => setViewMode('table')} className={`p-1.5 rounded-md transition-all ${viewMode === 'table' ? 'bg-blue-600 text-white' : 'text-slate-600'}`}><List className="w-3.5 h-3.5" /></button>
-                        <button onClick={() => setViewMode('grid')} className={`p-1.5 rounded-md transition-all ${viewMode === 'grid' ? 'bg-blue-600 text-white' : 'text-slate-600'}`}><LayoutGrid className="w-3.5 h-3.5" /></button>
                       </div>
                    </div>
 
@@ -425,15 +393,14 @@ const App: React.FC = () => {
                         disabled={extractedProducts.length === 0} 
                         className="px-6 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-900 disabled:text-slate-700 text-white rounded-xl font-black text-[8px] uppercase tracking-widest transition-all flex items-center gap-2 shadow-lg"
                       >
-                        <Download className="w-3.5 h-3.5" /> Download (.xlsx)
+                        <Download className="w-3.5 h-3.5" /> Export Excel
                       </button>
                    </div>
                 </div>
 
-                <div className="flex-1 overflow-auto custom-scrollbar pb-10">
+                <div className="flex-1 overflow-auto custom-scrollbar">
                   {filteredProducts.length > 0 ? (
-                    viewMode === 'table' ? (
-                      <table className="w-full text-left border-collapse table-fixed">
+                    <table className="w-full text-left border-collapse table-fixed">
                         <thead className="sticky top-0 bg-[#0b0e14] z-20 shadow-sm border-b border-white/[0.03]">
                           <tr>
                             <th className="w-12 px-4 py-3 text-center">
@@ -447,7 +414,7 @@ const App: React.FC = () => {
                             <th className="px-4 py-3 text-[8px] font-black text-slate-600 uppercase tracking-widest cursor-pointer" onClick={() => handleSort('description')}>
                                <div className="flex items-center gap-2">Description <ArrowUpDown className="w-2.5 h-2.5" /></div>
                             </th>
-                            <th className="w-28 px-4 py-3 text-[8px] font-black text-slate-600 uppercase tracking-widest text-right">Standard</th>
+                            <th className="w-28 px-4 py-3 text-[8px] font-black text-slate-600 uppercase tracking-widest text-right">Price</th>
                             <th className="w-28 px-4 py-3 text-[8px] font-black text-emerald-600 uppercase tracking-widest text-right">Promo</th>
                           </tr>
                         </thead>
@@ -465,39 +432,21 @@ const App: React.FC = () => {
                               <td className="px-4 py-2">
                                 <textarea value={p.description} onChange={(e) => updateProduct(p.id, 'description', e.target.value)} className="w-full bg-transparent border-none text-[9px] font-bold text-slate-400 resize-none focus:outline-none focus:text-slate-200" rows={1} />
                               </td>
-                              <td className="px-4 py-2">
+                              <td className="px-4 py-2 text-right">
                                 <input value={p.normalPrice} onChange={(e) => updateProduct(p.id, 'normalPrice', e.target.value)} className="w-full bg-transparent border-none text-[9px] font-black text-slate-500 text-right focus:outline-none focus:text-white" />
                               </td>
-                              <td className="px-4 py-2">
+                              <td className="px-4 py-2 text-right">
                                 <input value={p.specialPrice} onChange={(e) => updateProduct(p.id, 'specialPrice', e.target.value)} className="w-full bg-transparent border-none text-[10px] font-black text-emerald-500 text-right focus:outline-none" placeholder="---" />
                               </td>
                             </tr>
                           ))}
                         </tbody>
-                      </table>
-                    ) : (
-                      <div className="p-4 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-                        {filteredProducts.map(p => (
-                          <div key={p.id} className={`relative bg-white/[0.01] border rounded-2xl p-4 hover:border-blue-500/20 transition-all ${selectedIds.has(p.id) ? 'border-blue-500/40 bg-blue-600/5' : 'border-white/[0.03]'}`}>
-                             <button onClick={() => toggleSelect(p.id)} className={`absolute top-3 right-3 transition-all ${selectedIds.has(p.id) ? 'text-blue-500' : 'text-slate-800'}`}>
-                                <CheckSquare className="w-3.5 h-3.5" />
-                             </button>
-                             <div className="mb-2">
-                                <span className="text-[8px] font-black text-blue-500 uppercase tracking-widest">{p.sku || "N/A"}</span>
-                             </div>
-                             <textarea value={p.description} onChange={(e) => updateProduct(p.id, 'description', e.target.value)} className="w-full bg-transparent border-none text-[10px] font-bold text-slate-300 mb-3 resize-none focus:outline-none" rows={2} />
-                             <div className="flex justify-between items-center text-[9px] font-black border-t border-white/[0.03] pt-2">
-                                <span className="text-slate-600 uppercase">R {p.normalPrice || '0.00'}</span>
-                                <span className="text-emerald-500 uppercase">R {p.specialPrice || '0.00'}</span>
-                             </div>
-                          </div>
-                        ))}
-                      </div>
-                    )
+                    </table>
                   ) : (
-                    <div className="h-full flex flex-col items-center justify-center opacity-10 grayscale p-8 text-center pointer-events-none">
-                       <Triangle className="w-12 h-12 text-blue-500 mb-4 animate-pulse" />
-                       <h3 className="text-xl font-black text-white uppercase tracking-[0.3em]">System Standby</h3>
+                    <div className="h-full flex flex-col items-center justify-center opacity-10 grayscale p-12 text-center pointer-events-none">
+                       <Cloud className="w-16 h-16 text-blue-500 mb-4 animate-bounce" />
+                       <h3 className="text-xl font-black text-white uppercase tracking-[0.3em]">Cloud Ready</h3>
+                       <p className="text-[10px] font-bold text-slate-500 uppercase mt-2">Ingest files to begin neural extraction</p>
                     </div>
                   )}
                 </div>
@@ -506,192 +455,117 @@ const App: React.FC = () => {
           </div>
         ) : (
           <div className="animate-in fade-in zoom-in-95 duration-500 h-full overflow-y-auto custom-scrollbar px-4 pb-20">
-            <div className="max-w-6xl mx-auto space-y-12 pt-8">
+            <div className="max-w-5xl mx-auto py-12">
               
-              <div className="bg-gradient-to-br from-[#0b0e14] to-[#020305] border border-white/[0.03] rounded-[3rem] p-12 relative overflow-hidden">
-                 <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-blue-600/5 blur-[100px] rounded-full"></div>
-                 <div className="relative z-10">
-                   <h1 className="text-5xl font-black text-white italic tracking-tighter uppercase mb-6">Deployment<span className="text-blue-500"> Blueprint</span></h1>
-                   <p className="text-slate-400 text-lg font-medium italic max-w-2xl leading-relaxed mb-10">
-                     A professional guide to launching your private instance of BatchExtract Pro on GitHub and Vercel. Follow these steps to secure your environment and scale your data processing.
-                   </p>
-                   
-                   <div className="flex flex-wrap gap-4">
-                      <button 
-                        onClick={async () => { // @ts-ignore
-                         await window.aistudio.openSelectKey(); resetTerminal(); }}
-                        className="px-8 py-4 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all flex items-center gap-3 shadow-xl"
+              <div className="bg-gradient-to-br from-[#0b0e14] to-black border border-white/[0.05] rounded-[3rem] p-12 text-center relative overflow-hidden mb-12">
+                 <div className="absolute inset-0 bg-blue-600/5 blur-[120px] rounded-full -translate-y-1/2"></div>
+                 <h1 className="text-6xl font-black text-white italic tracking-tighter uppercase mb-6 relative">Zero-PC <span className="text-blue-500">Cloud Setup</span></h1>
+                 <p className="text-slate-400 text-lg font-medium italic max-w-2xl mx-auto leading-relaxed relative">
+                   Host this entire extractor online. No software installation, no technical terminal skills required. Runs 24/7 on Vercel's global edge network.
+                 </p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                 {[
+                   {
+                     step: "01",
+                     title: "Fork Repository",
+                     desc: "Click the 'Fork' button on GitHub to copy this app to your private account.",
+                     icon: <Github className="w-6 h-6" />,
+                     action: "Fork on GitHub",
+                     link: "#"
+                   },
+                   {
+                     step: "02",
+                     title: "Connect Vercel",
+                     desc: "Log into Vercel and import your new GitHub repository with one click.",
+                     icon: <Cloud className="w-6 h-6" />,
+                     action: "Import to Vercel",
+                     link: "https://vercel.com/new"
+                   },
+                   {
+                     step: "03",
+                     title: "Inject Secrets",
+                     desc: "Add your Gemini API keys as Environment Variables to power the neural engine.",
+                     icon: <Key className="w-6 h-6" />,
+                     action: "Manage Keys",
+                     link: "https://aistudio.google.com/app/apikey"
+                   }
+                 ].map((card, i) => (
+                   <div key={i} className="bg-[#0b0e14]/40 border border-white/[0.05] rounded-[2.5rem] p-8 flex flex-col items-center text-center group hover:border-blue-500/30 transition-all">
+                      <div className="w-16 h-16 rounded-2xl bg-blue-600/10 border border-blue-500/20 flex items-center justify-center text-blue-500 mb-6 group-hover:scale-110 transition-transform">
+                         {card.icon}
+                      </div>
+                      <span className="text-[10px] font-black text-blue-500 uppercase tracking-widest mb-2">Step {card.step}</span>
+                      <h3 className="text-xl font-black text-white uppercase italic mb-4">{card.title}</h3>
+                      <p className="text-xs text-slate-500 font-bold italic leading-relaxed mb-8 flex-1">{card.desc}</p>
+                      <a 
+                        href={card.link} 
+                        target="_blank" 
+                        className="w-full py-3 bg-white text-black rounded-xl font-black text-[9px] uppercase tracking-widest hover:bg-blue-500 hover:text-white transition-all flex items-center justify-center gap-2"
                       >
-                        <Key className="w-4 h-4" /> Setup Local Key
-                      </button>
-                      <a href="https://ai.google.dev/gemini-api/docs/billing" target="_blank" className="px-8 py-4 bg-slate-900 border border-white/[0.03] text-slate-400 hover:text-white rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all flex items-center gap-3">
-                         <ExternalLink className="w-4 h-4" /> Billing Info
+                         {card.action} <ExternalLink className="w-3 h-3" />
                       </a>
                    </div>
+                 ))}
+              </div>
+
+              <div className="mt-16 bg-[#0b0e14]/40 border border-white/[0.05] rounded-[3rem] p-10">
+                 <div className="flex items-center gap-4 mb-8">
+                    <Workflow className="w-6 h-6 text-blue-500" />
+                    <h2 className="text-2xl font-black text-white uppercase italic tracking-tighter">Scaling <span className="text-blue-500">Cloud Capacity</span></h2>
+                 </div>
+
+                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
+                    <div className="space-y-6">
+                       <p className="text-sm text-slate-400 font-bold italic leading-relaxed">
+                         To process hundreds of PDFs without hitting "Rate Limits," add multiple API keys in your Vercel Project Settings. The engine will automatically rotate between them.
+                       </p>
+                       <div className="bg-black/40 p-6 rounded-2xl border border-white/5 font-mono text-[10px] space-y-3">
+                          <p className="text-slate-600">// Add these in Vercel &gt; Settings &gt; Environment Variables</p>
+                          <div className="flex justify-between items-center bg-blue-500/5 p-2 rounded">
+                             <span className="text-blue-400 font-bold">API_KEY</span>
+                             <span className="text-slate-500 italic">Primary (Required)</span>
+                          </div>
+                          <div className="flex justify-between items-center p-2 rounded">
+                             <span className="text-white">API_KEY_2</span>
+                             <span className="text-slate-700 italic">Optional Expansion</span>
+                          </div>
+                          <div className="flex justify-between items-center p-2 rounded">
+                             <span className="text-white">API_KEY_3</span>
+                             <span className="text-slate-700 italic">Optional Expansion</span>
+                          </div>
+                       </div>
+                    </div>
+                    
+                    <div className="bg-blue-600/5 border border-blue-500/10 rounded-3xl p-8 flex flex-col justify-center">
+                       <div className="flex items-center gap-3 mb-4">
+                          <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
+                          <span className="text-[10px] font-black text-white uppercase tracking-widest">Global Edge Distribution</span>
+                       </div>
+                       <p className="text-xs text-slate-500 font-bold italic leading-relaxed mb-6">
+                         Once deployed, your app is accessible from any phone, tablet, or laptop. No local hardware is used for processing; everything happens in the cloud.
+                       </p>
+                       <div className="flex gap-4">
+                          <div className="px-4 py-2 bg-slate-900 rounded-lg border border-white/5 flex items-center gap-2">
+                             <Monitor className="w-3 h-3 text-slate-500" />
+                             <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Universal</span>
+                          </div>
+                          <div className="px-4 py-2 bg-slate-900 rounded-lg border border-white/5 flex items-center gap-2">
+                             <Server className="w-3 h-3 text-slate-500" />
+                             <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Scaleable</span>
+                          </div>
+                       </div>
+                    </div>
                  </div>
               </div>
 
-              <div className="space-y-16">
-                 
-                 {/* PHASE 01 */}
-                 <div className="relative">
-                    <div className="flex items-center gap-4 mb-8">
-                       <div className="w-12 h-12 rounded-2xl bg-blue-500/10 flex items-center justify-center text-blue-500 border border-blue-500/20">
-                          <Terminal className="w-6 h-6" />
-                       </div>
-                       <h2 className="text-3xl font-black text-white uppercase italic tracking-tighter">Phase 01: <span className="text-blue-500">Local Scaffolding</span></h2>
-                    </div>
-
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                       <div className="bg-[#0b0e14]/40 p-8 rounded-[2rem] border border-white/[0.03]">
-                          <p className="text-sm text-slate-400 font-bold italic mb-6">1. Initialize your project directory and core dependencies.</p>
-                          <div className="space-y-4">
-                             {[
-                               "mkdir batchextract-pro",
-                               "cd batchextract-pro",
-                               "git init",
-                               "npm install @google/genai lucide-react xlsx pdfjs-dist"
-                             ].map((cmd, i) => (
-                               <div key={i} className="flex items-center justify-between p-3 bg-black/40 rounded-xl border border-white/[0.02] group">
-                                  <code className="text-blue-400 text-[11px] font-mono">{cmd}</code>
-                                  <button onClick={() => copyToClipboard(cmd, `CMD_${i}`)} className="text-slate-600 hover:text-white transition-all"><Copy className="w-3.5 h-3.5" /></button>
-                               </div>
-                             ))}
-                          </div>
-                       </div>
-                       <div className="bg-blue-600/5 p-8 rounded-[2rem] border border-blue-500/10 flex flex-col justify-center">
-                          <h4 className="text-xs font-black text-white uppercase mb-4 flex items-center gap-2">
-                             <Monitor className="w-4 h-4 text-blue-500" /> Bulk Command
-                          </h4>
-                          <p className="text-[11px] text-slate-500 italic mb-6">Copy and paste this entire block into your terminal to speed up the process.</p>
-                          <button 
-                            onClick={() => copyToClipboard('mkdir batchextract-pro\ncd batchextract-pro\ngit init\nnpm install @google/genai lucide-react xlsx pdfjs-dist', 'Phase 1 Bulk')}
-                            className="w-full py-4 bg-slate-900 hover:bg-slate-800 text-blue-400 border border-blue-500/20 rounded-xl font-mono text-[10px] flex items-center justify-between px-6 group"
-                          >
-                             <span>[COPY ALL PHASE 01]</span>
-                             <Code className="w-4 h-4 group-hover:scale-110 transition-transform" />
-                          </button>
-                       </div>
-                    </div>
-                 </div>
-
-                 {/* PHASE 02 */}
-                 <div className="relative">
-                    <div className="flex items-center gap-4 mb-8">
-                       <div className="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center text-white border border-white/10">
-                          <Github className="w-6 h-6" />
-                       </div>
-                       <h2 className="text-3xl font-black text-white uppercase italic tracking-tighter">Phase 02: <span className="text-white">Git Synchronization</span></h2>
-                    </div>
-
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                       <div className="space-y-6">
-                          <div className="p-6 bg-[#0b0e14]/40 border border-white/[0.03] rounded-3xl">
-                             <h4 className="text-[10px] font-black text-white uppercase tracking-widest mb-4">A. Remote Connection</h4>
-                             <p className="text-[11px] text-slate-500 italic leading-relaxed mb-4">
-                                Create a new repository on GitHub (Private recommended). Copy the Remote URL and run:
-                             </p>
-                             <div className="flex items-center justify-between p-3 bg-black/40 rounded-xl border border-white/[0.02]">
-                                <code className="text-emerald-400 text-[10px] font-mono">git remote add origin YOUR_URL_HERE</code>
-                             </div>
-                          </div>
-                          <div className="p-6 bg-[#0b0e14]/40 border border-white/[0.03] rounded-3xl">
-                             <h4 className="text-[10px] font-black text-white uppercase tracking-widest mb-4">B. Initial Push</h4>
-                             <p className="text-[11px] text-slate-500 italic mb-4">Push your source code to the main branch.</p>
-                             <div className="space-y-3">
-                                <code className="block p-2 bg-black/20 text-[10px] text-slate-400 rounded">git add .</code>
-                                <code className="block p-2 bg-black/20 text-[10px] text-slate-400 rounded">git commit -m "Initialize V3.5 Core"</code>
-                                <code className="block p-2 bg-black/20 text-[10px] text-slate-400 rounded">git push -u origin main</code>
-                             </div>
-                          </div>
-                       </div>
-                       <div className="bg-white/5 p-8 rounded-[2rem] border border-white/10 flex flex-col items-center justify-center text-center">
-                          <Shield className="w-12 h-12 text-white/20 mb-6" />
-                          <h4 className="text-xs font-black text-white uppercase mb-2">Security Protocol</h4>
-                          <p className="text-[10px] text-slate-500 font-bold italic max-w-xs">Ensure your .gitignore includes node_modules and .env files before pushing to any public repository.</p>
-                       </div>
-                    </div>
-                 </div>
-
-                 {/* PHASE 03 */}
-                 <div className="relative">
-                    <div className="flex items-center gap-4 mb-8">
-                       <div className="w-12 h-12 rounded-2xl bg-blue-600/10 flex items-center justify-center text-blue-500 border border-blue-500/20">
-                          <Cloud className="w-6 h-6" />
-                       </div>
-                       <h2 className="text-3xl font-black text-white uppercase italic tracking-tighter">Phase 03: <span className="text-blue-500">Vercel Scaling</span></h2>
-                    </div>
-
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
-                       <div className="bg-slate-900/50 p-8 rounded-[3rem] border border-white/5 space-y-6">
-                          <div className="flex items-center gap-3">
-                             <Settings className="w-5 h-5 text-blue-500" />
-                             <h4 className="text-xs font-black text-white uppercase">Industrial Key Scaling</h4>
-                          </div>
-                          <p className="text-[11px] text-slate-500 italic leading-relaxed">
-                             To prevent "429 Rate Limit" errors during massive batch extractions, our engine supports up to 5 rotating API keys.
-                          </p>
-                          
-                          <div className="p-4 bg-blue-500/10 rounded-2xl border border-blue-500/20 space-y-4">
-                             <div className="flex items-center justify-between border-b border-blue-500/10 pb-2">
-                                <span className="text-[9px] font-black text-blue-400">VAR NAME</span>
-                                <span className="text-[9px] font-black text-slate-500 uppercase">Recommended Usage</span>
-                             </div>
-                             <div className="space-y-2">
-                                <div className="flex justify-between font-mono text-[10px]">
-                                   <span className="text-white">API_KEY</span>
-                                   <span className="text-emerald-500 italic">Primary (Required)</span>
-                                </div>
-                                <div className="flex justify-between font-mono text-[10px]">
-                                   <span className="text-white">API_KEY_2</span>
-                                   <span className="text-blue-400/50 italic">Secondary (Optional)</span>
-                                </div>
-                                <div className="flex justify-between font-mono text-[10px]">
-                                   <span className="text-white">API_KEY_3</span>
-                                   <span className="text-blue-400/50 italic">Tertiary (Optional)</span>
-                                </div>
-                                <div className="flex justify-between font-mono text-[10px]">
-                                   <span className="text-white">API_KEY_4</span>
-                                   <span className="text-blue-400/50 italic">Extended (Optional)</span>
-                                </div>
-                                <div className="flex justify-between font-mono text-[10px]">
-                                   <span className="text-white">API_KEY_5</span>
-                                   <span className="text-blue-400/50 italic">Exhaustive (Optional)</span>
-                                </div>
-                             </div>
-                          </div>
-                       </div>
-
-                       <div className="flex flex-col justify-center gap-6">
-                          <div className="p-6 bg-[#0b0e14]/40 border border-white/[0.03] rounded-3xl">
-                             <h4 className="text-[10px] font-black text-white uppercase tracking-widest mb-3">Setup Instructions</h4>
-                             <ol className="text-[11px] text-slate-500 space-y-3 font-bold italic">
-                                <li>1. In Vercel, go to <strong>Project Settings &rarr; Environment Variables</strong>.</li>
-                                <li>2. Add each key as a new variable using the names above.</li>
-                                <li>3. Hit <strong>Redeploy</strong> to activate the Neural Rotation cluster.</li>
-                             </ol>
-                          </div>
-                          <div className="p-6 bg-emerald-500/5 border border-emerald-500/10 rounded-3xl flex items-start gap-4">
-                             <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0" />
-                             <div>
-                                <h5 className="text-[10px] font-black text-white uppercase mb-1">Success Criteria</h5>
-                                <p className="text-[9px] text-slate-500 font-bold italic leading-relaxed">The engine will automatically detect additional keys and rotate them to provide up to 5x the throughput of a single-key setup.</p>
-                             </div>
-                          </div>
-                       </div>
-                    </div>
-                 </div>
-
-              </div>
-
-              <div className="flex flex-col items-center py-20 gap-8">
-                 <div className="h-px w-20 bg-white/10"></div>
-                 <p className="text-[9px] text-slate-800 font-black uppercase tracking-[1.5em]">SYSTEM CONFIGURATION COMPLETE</p>
+              <div className="text-center mt-12">
                  <button 
                   onClick={() => setActiveTab('main')}
-                  className="px-10 py-5 bg-blue-600 hover:bg-blue-500 text-white rounded-[2rem] font-black text-xs uppercase tracking-[0.2em] transition-all shadow-[0_0_30px_rgba(37,99,235,0.4)] active:scale-95 flex items-center gap-3"
+                  className="px-12 py-5 bg-blue-600 hover:bg-blue-500 text-white rounded-[2rem] font-black text-xs uppercase tracking-[0.2em] transition-all shadow-2xl active:scale-95 flex items-center gap-3 mx-auto"
                  >
-                   Return to Terminal <TerminalIcon className="w-4 h-4" />
+                   Open Extractor Dashboard <ArrowRight className="w-4 h-4" />
                  </button>
               </div>
 
@@ -700,33 +574,19 @@ const App: React.FC = () => {
         )}
       </main>
 
-      <footer className="fixed bottom-0 left-0 right-0 py-2 h-10 border-t border-white/[0.03] bg-[#020305]/80 backdrop-blur-xl z-[100] pointer-events-none">
+      <footer className="fixed bottom-0 left-0 right-0 py-2 h-10 border-t border-white/[0.03] bg-[#020305]/95 backdrop-blur-xl z-[100] pointer-events-none">
         <div className="max-w-[120rem] mx-auto h-full px-4 flex justify-between items-center text-[7px] font-black text-slate-700 uppercase tracking-widest">
-           <span>BatchExtract Pro Labs 2025</span>
+           <div className="flex items-center gap-4">
+             <span>BatchCloud Protocol V3.5</span>
+             <span className="flex items-center gap-1"><Globe className="w-2 h-2" /> Hosted on Vercel Edge</span>
+           </div>
            <div className="flex gap-4">
-              <span>Cluster V3.5 Stable</span>
               <span className={status === ExtractionStatus.PROCESSING ? 'text-emerald-500' : 'text-slate-700'}>
-                {status === ExtractionStatus.PROCESSING ? 'Inference Active' : 'Standby Mode'}
+                {status === ExtractionStatus.PROCESSING ? 'Neural Cloud Ingesting...' : 'System Latency: 42ms'}
               </span>
            </div>
         </div>
       </footer>
-      
-      <style>{`
-        .custom-scrollbar::-webkit-scrollbar {
-          width: 3px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-track {
-          background: transparent;
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb {
-          background: rgba(59, 130, 246, 0.1);
-          border-radius: 10px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-          background: rgba(59, 130, 246, 0.3);
-        }
-      `}</style>
     </div>
   );
 };
