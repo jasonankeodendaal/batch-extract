@@ -1,46 +1,38 @@
 
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useMemo } from 'react';
 import * as pdfjs from 'pdfjs-dist';
 import { 
   Upload, 
   FileText, 
-  CheckCircle2, 
   Loader2, 
   Download, 
   Trash2, 
-  LayoutGrid, 
-  List, 
-  Zap, 
   Database, 
   RefreshCw, 
-  AlignLeft, 
-  Terminal as TerminalIcon, 
-  Triangle, 
   Search,
   CheckSquare,
   Square,
   ArrowUpDown,
-  Layers,
   Zap as ZapIcon,
   Cloud,
-  Code,
-  Monitor,
-  Key,
-  Github,
-  ExternalLink,
+  Cpu,
+  ShieldCheck,
   Plus,
   ArrowRight,
   Globe,
-  ShieldCheck,
-  Cpu,
   Server,
-  Workflow
+  Workflow,
+  Key,
+  Github,
+  ExternalLink,
+  Monitor
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { extractProductsFromImage, normalizeProductData } from './services/geminiService';
 import { Product, ProcessingFile, ExtractionStatus } from './types';
 import PlexusBackground from './PlexusBackground';
 
+// Ensure the worker is properly loaded from unpkg
 pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
 
 const App: React.FC = () => {
@@ -48,14 +40,12 @@ const App: React.FC = () => {
   const [files, setFiles] = useState<ProcessingFile[]>([]);
   const [extractedProducts, setExtractedProducts] = useState<Product[]>([]);
   const [status, setStatus] = useState<ExtractionStatus>(ExtractionStatus.IDLE);
-  const [viewMode, setViewMode] = useState<'table' | 'grid'>('table');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [sortConfig, setSortConfig] = useState<{ key: keyof Product; direction: 'asc' | 'desc' } | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const isProcessingRef = useRef<boolean>(false);
   const abortIdRef = useRef<number>(0);
 
   const cleanPrice = (price: string | undefined): string => {
@@ -85,7 +75,6 @@ const App: React.FC = () => {
 
   const resetTerminal = () => {
     abortIdRef.current += 1;
-    isProcessingRef.current = false;
     setFiles([]);
     setExtractedProducts([]);
     setStatus(ExtractionStatus.IDLE);
@@ -106,105 +95,120 @@ const App: React.FC = () => {
   };
 
   const selectAll = () => {
-    if (selectedIds.size === filteredProducts.length) setSelectedIds(new Set());
+    if (selectedIds.size === filteredProducts.length && filteredProducts.length > 0) setSelectedIds(new Set());
     else setSelectedIds(new Set(filteredProducts.map(p => p.id)));
   };
 
   const processAllFiles = async () => {
     if (files.length === 0 || status === ExtractionStatus.PROCESSING) return;
+    
     const currentAbortId = abortIdRef.current;
     setStatus(ExtractionStatus.PROCESSING);
-    isProcessingRef.current = true;
     setErrorMessage(null);
 
-    for (const processingFile of files) {
-      if (abortIdRef.current !== currentAbortId) return;
-      if (processingFile.status === 'completed') continue;
+    try {
+      for (const processingFile of files) {
+        if (abortIdRef.current !== currentAbortId) return;
+        if (processingFile.status === 'completed') continue;
 
-      try {
         setFiles(prev => prev.map(f => f.id === processingFile.id ? { ...f, status: 'processing', progress: 5 } : f));
+        
         const fileName = processingFile.file.name.toLowerCase();
         const allExtracted: Product[] = [];
 
-        if (fileName.endsWith('.pdf')) {
-          const arrayBuffer = await processingFile.file.arrayBuffer();
-          const pdf = await pdfjs.getDocument({ data: arrayBuffer }).promise;
-          const totalPages = pdf.numPages;
-          
-          for (let i = 1; i <= totalPages; i++) {
-            if (abortIdRef.current !== currentAbortId) return;
-            const page = await pdf.getPage(i);
-            const viewport = page.getViewport({ scale: 3.5 }); 
-            const canvas = document.createElement('canvas');
-            const context = canvas.getContext('2d');
-            if (!context) continue;
-            canvas.height = viewport.height;
-            canvas.width = viewport.width;
-            await page.render({ canvasContext: context, viewport, canvas: canvas } as any).promise;
-            const base64Image = canvas.toDataURL('image/jpeg', 0.9).split(',')[1];
-            const extracted = await extractProductsFromImage(base64Image);
-            if (abortIdRef.current !== currentAbortId) return;
-            const pageProducts = (extracted || []).map(item => ({
-              id: Math.random().toString(36).substr(2, 9),
-              sku: item.sku || '',
-              description: item.description || '',
-              normalPrice: cleanPrice(item.normalPrice),
-              specialPrice: cleanPrice(item.specialPrice),
-              brand: processingFile.file.name.split('.')[0],
-              fileName: processingFile.file.name
-            }));
-            allExtracted.push(...pageProducts);
-            const progressPercent = Math.round((i / totalPages) * 100);
-            setFiles(prev => prev.map(f => f.id === processingFile.id ? { ...f, progress: progressPercent } : f));
+        try {
+          if (fileName.endsWith('.pdf')) {
+            const arrayBuffer = await processingFile.file.arrayBuffer();
+            const pdf = await pdfjs.getDocument({ data: arrayBuffer }).promise;
+            const totalPages = pdf.numPages;
+            
+            for (let i = 1; i <= totalPages; i++) {
+              if (abortIdRef.current !== currentAbortId) return;
+              
+              const page = await pdf.getPage(i);
+              // Scale 2.0 is usually balanced for high OCR quality and performance
+              const viewport = page.getViewport({ scale: 2.0 }); 
+              const canvas = document.createElement('canvas');
+              const context = canvas.getContext('2d');
+              if (!context) continue;
+              
+              canvas.height = viewport.height;
+              canvas.width = viewport.width;
+              await page.render({ canvasContext: context, viewport }).promise;
+              
+              const base64Image = canvas.toDataURL('image/jpeg', 0.85).split(',')[1];
+              const extracted = await extractProductsFromImage(base64Image);
+              
+              if (abortIdRef.current !== currentAbortId) return;
+              
+              const pageProducts = (extracted || []).map(item => ({
+                id: Math.random().toString(36).substr(2, 9),
+                sku: item.sku || '',
+                description: item.description || '',
+                normalPrice: cleanPrice(item.normalPrice),
+                specialPrice: cleanPrice(item.specialPrice),
+                brand: processingFile.file.name.split('.')[0],
+                fileName: processingFile.file.name
+              }));
+              
+              allExtracted.push(...pageProducts);
+              const progressPercent = Math.round((i / totalPages) * 100);
+              setFiles(prev => prev.map(f => f.id === processingFile.id ? { ...f, progress: progressPercent } : f));
+            }
+          } else if (/\.(xlsx|xls|csv)$/i.test(fileName)) {
+            const arrayBuffer = await processingFile.file.arrayBuffer();
+            const workbook = XLSX.read(arrayBuffer);
+            const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+            const jsonData = XLSX.utils.sheet_to_json(worksheet);
+            
+            const CHUNK_SIZE = 50; 
+            for (let i = 0; i < jsonData.length; i += CHUNK_SIZE) {
+              if (abortIdRef.current !== currentAbortId) return;
+              const chunk = jsonData.slice(i, i + CHUNK_SIZE);
+              const normalized = await normalizeProductData(JSON.stringify(chunk));
+              
+              const products = (normalized || []).map(item => ({
+                id: Math.random().toString(36).substr(2, 9),
+                sku: item.sku || '',
+                description: item.description || '',
+                normalPrice: cleanPrice(item.normalPrice),
+                specialPrice: cleanPrice(item.specialPrice),
+                brand: processingFile.file.name.split('.')[0],
+                fileName: processingFile.file.name
+              }));
+              
+              allExtracted.push(...products);
+              const progressPercent = Math.round((Math.min(i + CHUNK_SIZE, jsonData.length) / jsonData.length) * 100);
+              setFiles(prev => prev.map(f => f.id === processingFile.id ? { ...f, progress: progressPercent } : f));
+            }
           }
-        } else if (/\.(xlsx|xls|csv)$/i.test(fileName)) {
-          const arrayBuffer = await processingFile.file.arrayBuffer();
-          const workbook = XLSX.read(arrayBuffer);
-          const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-          const jsonData = XLSX.utils.sheet_to_json(worksheet);
-          const CHUNK_SIZE = 40; 
-          for (let i = 0; i < jsonData.length; i += CHUNK_SIZE) {
-            if (abortIdRef.current !== currentAbortId) return;
-            const chunk = jsonData.slice(i, i + CHUNK_SIZE);
-            const normalized = await normalizeProductData(JSON.stringify(chunk));
-            const products = (normalized || []).map(item => ({
-              id: Math.random().toString(36).substr(2, 9),
-              sku: item.sku || '',
-              description: item.description || '',
-              normalPrice: cleanPrice(item.normalPrice),
-              specialPrice: cleanPrice(item.specialPrice),
-              brand: processingFile.file.name.split('.')[0],
-              fileName: processingFile.file.name
-            }));
-            allExtracted.push(...products);
-            const progressPercent = Math.round((Math.min(i + CHUNK_SIZE, jsonData.length) / jsonData.length) * 100);
-            setFiles(prev => prev.map(f => f.id === processingFile.id ? { ...f, progress: progressPercent } : f));
+
+          if (abortIdRef.current === currentAbortId) {
+            setExtractedProducts(prev => [...prev, ...allExtracted]);
+            setFiles(prev => prev.map(f => f.id === processingFile.id ? { ...f, status: 'completed', progress: 100, extractedCount: allExtracted.length } : f));
           }
+        } catch (err: any) {
+          console.error(`Error processing ${processingFile.file.name}:`, err);
+          setFiles(prev => prev.map(f => f.id === processingFile.id ? { ...f, status: 'error', error: 'Extraction Failure' } : f));
         }
-        
-        if (abortIdRef.current === currentAbortId) {
-          setExtractedProducts(prev => [...prev, ...allExtracted]);
-          setFiles(prev => prev.map(f => f.id === processingFile.id ? { ...f, status: 'completed', progress: 100, extractedCount: allExtracted.length } : f));
-        }
-      } catch (err: any) {
-        if (err.message?.includes("quota") || err.status === 429) {
-          setErrorMessage("Cloud Cluster Rate Limit. Use Vercel Secrets to add more keys.");
-          setStatus(ExtractionStatus.IDLE);
-          isProcessingRef.current = false;
-          return;
-        }
-        setFiles(prev => prev.map(f => f.id === processingFile.id ? { ...f, status: 'error', error: 'Extraction Failure' } : f));
       }
-    }
-    if (abortIdRef.current === currentAbortId) {
-      setStatus(ExtractionStatus.COMPLETED);
-      isProcessingRef.current = false;
+      
+      if (abortIdRef.current === currentAbortId) {
+        setStatus(ExtractionStatus.COMPLETED);
+      }
+    } catch (err: any) {
+      setErrorMessage(err.message || "An unexpected error occurred during processing.");
+      setStatus(ExtractionStatus.IDLE);
     }
   };
 
-  const exportToExcel = (dataToExport?: Product[]) => {
-    const list = dataToExport || (selectedIds.size > 0 ? extractedProducts.filter(p => selectedIds.has(p.id)) : extractedProducts);
+  const exportToExcel = () => {
+    const list = selectedIds.size > 0 
+      ? extractedProducts.filter(p => selectedIds.has(p.id)) 
+      : extractedProducts;
+      
     if (list.length === 0) return;
+    
     const worksheetData = list.map((p) => ({
       "SKU": p.sku, 
       "DESCRIPTION": p.description, 
@@ -212,6 +216,7 @@ const App: React.FC = () => {
       "PROMO": p.specialPrice,
       "BRAND/FILE": p.brand
     }));
+    
     const worksheet = XLSX.utils.json_to_sheet(worksheetData);
     const colWidths = [{ wch: 20 }, { wch: 60 }, { wch: 12 }, { wch: 12 }, { wch: 20 }];
     worksheet['!cols'] = colWidths;
@@ -263,7 +268,7 @@ const App: React.FC = () => {
              <div className="flex flex-col">
                <span className="text-lg font-black text-white tracking-tighter uppercase leading-none italic">Batch<span className="text-blue-500">Cloud</span></span>
                <span className="text-[7px] font-black text-slate-600 uppercase tracking-widest mt-0.5 flex items-center gap-1">
-                 <Server className="w-2 h-2 text-emerald-500" /> Web Instance Stable
+                 <Server className="w-2 h-2 text-emerald-500" /> Neural Processing Stable
                </span>
              </div>
           </div>
@@ -299,10 +304,10 @@ const App: React.FC = () => {
           <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 flex flex-col gap-4 h-full">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 shrink-0">
                {[
-                 { label: "Cloud Engine", val: status === ExtractionStatus.PROCESSING ? "Active" : "Online", icon: <Cpu className="text-blue-500" /> },
-                 { label: "Extracted", val: extractedProducts.length, icon: <Database className="text-purple-500" /> },
-                 { label: "Assets", val: files.length, icon: <FileText className="text-yellow-500" /> },
-                 { label: "Privacy", val: "End-to-End", icon: <ShieldCheck className="text-emerald-500" /> }
+                 { label: "Engine Status", val: status === ExtractionStatus.PROCESSING ? "Extracting..." : "Ready", icon: <Cpu className="text-blue-500" /> },
+                 { label: "Total Rows", val: extractedProducts.length, icon: <Database className="text-purple-500" /> },
+                 { label: "Files Queued", val: files.length, icon: <FileText className="text-yellow-500" /> },
+                 { label: "Network", val: "Edge Secure", icon: <ShieldCheck className="text-emerald-500" /> }
                ].map((stat, i) => (
                  <div key={i} className="bg-[#0b0e14]/60 border border-white/[0.03] rounded-2xl p-3 flex items-center gap-4 hover:bg-white/[0.02] transition-all">
                     <div className="w-10 h-10 rounded-xl bg-slate-900/50 border border-white/[0.03] flex items-center justify-center">
@@ -320,7 +325,7 @@ const App: React.FC = () => {
               <div className="lg:w-72 flex flex-col gap-4 shrink-0 overflow-hidden">
                 <div className="bg-[#0b0e14]/60 border border-white/[0.03] rounded-3xl p-4 flex flex-col shadow-2xl overflow-hidden backdrop-blur-3xl h-full">
                   <h2 className="text-[9px] font-black text-white uppercase tracking-widest italic flex items-center gap-2 mb-4">
-                    <Upload className="w-3 h-3 text-blue-500" /> Asset Ingestion
+                    <Upload className="w-3 h-3 text-blue-500" /> File Ingestion
                   </h2>
 
                   <div 
@@ -332,15 +337,15 @@ const App: React.FC = () => {
                       <Plus className="w-5 h-5 text-blue-500" />
                     </div>
                     <p className="text-[9px] font-black text-white tracking-tight uppercase">Upload PDF / Excel</p>
-                    <p className="text-[7px] text-slate-500 mt-1 uppercase font-bold">Cloud processing ready</p>
+                    <p className="text-[7px] text-slate-500 mt-1 uppercase font-bold">Automatic brand detection</p>
                   </div>
 
                   <div className="mt-4 flex-1 overflow-y-auto pr-1 custom-scrollbar space-y-2">
                     {files.map(f => (
-                      <div key={f.id} className={`p-3 rounded-xl border transition-all duration-300 ${f.status === 'processing' ? 'bg-blue-600/10 border-blue-500/30' : 'bg-white/[0.01] border-white/[0.03]'}`}>
+                      <div key={f.id} className={`p-3 rounded-xl border transition-all duration-300 ${f.status === 'processing' ? 'bg-blue-600/10 border-blue-500/30' : f.status === 'error' ? 'border-red-500/30 bg-red-500/5' : 'bg-white/[0.01] border-white/[0.03]'}`}>
                         <div className="flex items-center justify-between gap-2 overflow-hidden">
                            <div className="flex items-center gap-2 min-w-0">
-                             <FileText className={`w-3.5 h-3.5 shrink-0 ${f.status === 'completed' ? 'text-emerald-500' : 'text-slate-500'}`} />
+                             <FileText className={`w-3.5 h-3.5 shrink-0 ${f.status === 'completed' ? 'text-emerald-500' : f.status === 'error' ? 'text-red-500' : 'text-slate-500'}`} />
                              <span className="text-[9px] font-bold text-slate-300 truncate">{f.file.name}</span>
                            </div>
                            {status !== ExtractionStatus.PROCESSING && (
@@ -350,10 +355,12 @@ const App: React.FC = () => {
                            )}
                         </div>
                         {f.status === 'processing' && (
-                          <div className="h-0.5 bg-slate-800 rounded-full mt-2 overflow-hidden">
-                            <div className="h-full bg-blue-500 animate-pulse" style={{ width: `${f.progress}%` }} />
+                          <div className="h-1 bg-slate-800 rounded-full mt-2 overflow-hidden">
+                            <div className="h-full bg-blue-500 transition-all duration-500" style={{ width: `${f.progress}%` }} />
                           </div>
                         )}
+                        {f.status === 'error' && <p className="text-[7px] text-red-500 font-bold uppercase mt-1">Error: {f.error}</p>}
+                        {f.status === 'completed' && <p className="text-[7px] text-emerald-500 font-bold uppercase mt-1">{f.extractedCount} items found</p>}
                       </div>
                     ))}
                   </div>
@@ -362,12 +369,12 @@ const App: React.FC = () => {
                     <button 
                       onClick={processAllFiles} 
                       disabled={files.length === 0 || status === ExtractionStatus.PROCESSING} 
-                      className={`w-full py-3.5 rounded-xl font-black text-[9px] uppercase tracking-widest transition-all flex items-center justify-center gap-2 shadow-xl active:scale-95 ${status === ExtractionStatus.PROCESSING ? 'bg-blue-600 text-white animate-pulse' : 'bg-white text-black hover:bg-blue-500 hover:text-white disabled:bg-slate-900 disabled:text-slate-700'}`}
+                      className={`w-full py-3.5 rounded-xl font-black text-[9px] uppercase tracking-widest transition-all flex items-center justify-center gap-2 shadow-xl active:scale-95 ${status === ExtractionStatus.PROCESSING ? 'bg-blue-600 text-white' : 'bg-white text-black hover:bg-blue-500 hover:text-white disabled:bg-slate-900 disabled:text-slate-700'}`}
                     >
                       {status === ExtractionStatus.PROCESSING ? <Loader2 className="w-3 h-3 animate-spin" /> : <ZapIcon className="w-3 h-3" />}
-                      {status === ExtractionStatus.PROCESSING ? 'Cloud Processing...' : 'Start Extraction'}
+                      {status === ExtractionStatus.PROCESSING ? 'Processing PDF...' : 'Convert to Excel'}
                     </button>
-                    {errorMessage && <p className="mt-2 text-[8px] text-red-500 font-black uppercase text-center bg-red-500/10 py-1 rounded-md">{errorMessage}</p>}
+                    {errorMessage && <p className="mt-2 text-[8px] text-red-400 font-black uppercase text-center bg-red-500/10 py-1.5 rounded-md px-2 leading-tight">{errorMessage}</p>}
                   </div>
                 </div>
               </div>
@@ -379,7 +386,7 @@ const App: React.FC = () => {
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-600 group-focus-within:text-blue-500 transition-colors" />
                         <input 
                           type="text" 
-                          placeholder="Search database..." 
+                          placeholder="Search SKUs or descriptions..." 
                           value={searchQuery}
                           onChange={(e) => setSearchQuery(e.target.value)}
                           className="w-full bg-slate-900/50 border border-white/[0.03] rounded-xl py-2 pl-9 pr-3 text-[10px] font-bold text-white placeholder:text-slate-700 focus:outline-none focus:border-blue-500/30 transition-all"
@@ -389,11 +396,11 @@ const App: React.FC = () => {
 
                    <div className="flex items-center gap-2">
                       <button 
-                        onClick={() => exportToExcel()} 
+                        onClick={exportToExcel} 
                         disabled={extractedProducts.length === 0} 
                         className="px-6 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-900 disabled:text-slate-700 text-white rounded-xl font-black text-[8px] uppercase tracking-widest transition-all flex items-center gap-2 shadow-lg"
                       >
-                        <Download className="w-3.5 h-3.5" /> Export Excel
+                        <Download className="w-3.5 h-3.5" /> Export {selectedIds.size > 0 ? `(${selectedIds.size})` : ''} Excel
                       </button>
                    </div>
                 </div>
@@ -404,8 +411,8 @@ const App: React.FC = () => {
                         <thead className="sticky top-0 bg-[#0b0e14] z-20 shadow-sm border-b border-white/[0.03]">
                           <tr>
                             <th className="w-12 px-4 py-3 text-center">
-                               <button onClick={selectAll} className={`transition-all ${selectedIds.size === filteredProducts.length ? 'text-blue-500' : 'text-slate-800'}`}>
-                                  {selectedIds.size === filteredProducts.length ? <CheckSquare className="w-4 h-4" /> : <Square className="w-4 h-4" />}
+                               <button onClick={selectAll} className={`transition-all ${selectedIds.size > 0 && selectedIds.size === filteredProducts.length ? 'text-blue-500' : 'text-slate-800'}`}>
+                                  {selectedIds.size > 0 && selectedIds.size === filteredProducts.length ? <CheckSquare className="w-4 h-4" /> : <Square className="w-4 h-4" />}
                                </button>
                             </th>
                             <th className="w-40 px-4 py-3 text-[8px] font-black text-slate-600 uppercase tracking-widest cursor-pointer" onClick={() => handleSort('sku')}>
@@ -445,8 +452,8 @@ const App: React.FC = () => {
                   ) : (
                     <div className="h-full flex flex-col items-center justify-center opacity-10 grayscale p-12 text-center pointer-events-none">
                        <Cloud className="w-16 h-16 text-blue-500 mb-4 animate-bounce" />
-                       <h3 className="text-xl font-black text-white uppercase tracking-[0.3em]">Cloud Ready</h3>
-                       <p className="text-[10px] font-bold text-slate-500 uppercase mt-2">Ingest files to begin neural extraction</p>
+                       <h3 className="text-xl font-black text-white uppercase tracking-[0.3em]">Drop PDF Here</h3>
+                       <p className="text-[10px] font-bold text-slate-500 uppercase mt-2">Neural engine will extract SKU and Description automatically</p>
                     </div>
                   )}
                 </div>
@@ -459,9 +466,9 @@ const App: React.FC = () => {
               
               <div className="bg-gradient-to-br from-[#0b0e14] to-black border border-white/[0.05] rounded-[3rem] p-12 text-center relative overflow-hidden mb-12">
                  <div className="absolute inset-0 bg-blue-600/5 blur-[120px] rounded-full -translate-y-1/2"></div>
-                 <h1 className="text-6xl font-black text-white italic tracking-tighter uppercase mb-6 relative">Zero-PC <span className="text-blue-500">Cloud Setup</span></h1>
+                 <h1 className="text-6xl font-black text-white italic tracking-tighter uppercase mb-6 relative">Zero-Host <span className="text-blue-500">Cloud Setup</span></h1>
                  <p className="text-slate-400 text-lg font-medium italic max-w-2xl mx-auto leading-relaxed relative">
-                   Host this entire extractor online. No software installation, no technical terminal skills required. Runs 24/7 on Vercel's global edge network.
+                   Process unlimited brand pricelists by hosting this utility on Vercel with your own API keys.
                  </p>
               </div>
 
@@ -485,10 +492,10 @@ const App: React.FC = () => {
                    },
                    {
                      step: "03",
-                     title: "Inject Secrets",
+                     title: "Inject API Key",
                      desc: "Add your Gemini API keys as Environment Variables to power the neural engine.",
                      icon: <Key className="w-6 h-6" />,
-                     action: "Manage Keys",
+                     action: "Get Gemini Key",
                      link: "https://aistudio.google.com/app/apikey"
                    }
                  ].map((card, i) => (
@@ -502,6 +509,7 @@ const App: React.FC = () => {
                       <a 
                         href={card.link} 
                         target="_blank" 
+                        rel="noreferrer"
                         className="w-full py-3 bg-white text-black rounded-xl font-black text-[9px] uppercase tracking-widest hover:bg-blue-500 hover:text-white transition-all flex items-center justify-center gap-2"
                       >
                          {card.action} <ExternalLink className="w-3 h-3" />
@@ -513,27 +521,19 @@ const App: React.FC = () => {
               <div className="mt-16 bg-[#0b0e14]/40 border border-white/[0.05] rounded-[3rem] p-10">
                  <div className="flex items-center gap-4 mb-8">
                     <Workflow className="w-6 h-6 text-blue-500" />
-                    <h2 className="text-2xl font-black text-white uppercase italic tracking-tighter">Scaling <span className="text-blue-500">Cloud Capacity</span></h2>
+                    <h2 className="text-2xl font-black text-white uppercase italic tracking-tighter">Scaling <span className="text-blue-500">API Capacity</span></h2>
                  </div>
 
                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
                     <div className="space-y-6">
                        <p className="text-sm text-slate-400 font-bold italic leading-relaxed">
-                         To process hundreds of PDFs without hitting "Rate Limits," add multiple API keys in your Vercel Project Settings. The engine will automatically rotate between them.
+                         The engine requires a valid Gemini API key. Ensure `API_KEY` is set in your environment variables.
                        </p>
                        <div className="bg-black/40 p-6 rounded-2xl border border-white/5 font-mono text-[10px] space-y-3">
-                          <p className="text-slate-600">// Add these in Vercel &gt; Settings &gt; Environment Variables</p>
+                          <p className="text-slate-600">// Vercel Environment Variables</p>
                           <div className="flex justify-between items-center bg-blue-500/5 p-2 rounded">
                              <span className="text-blue-400 font-bold">API_KEY</span>
-                             <span className="text-slate-500 italic">Primary (Required)</span>
-                          </div>
-                          <div className="flex justify-between items-center p-2 rounded">
-                             <span className="text-white">API_KEY_2</span>
-                             <span className="text-slate-700 italic">Optional Expansion</span>
-                          </div>
-                          <div className="flex justify-between items-center p-2 rounded">
-                             <span className="text-white">API_KEY_3</span>
-                             <span className="text-slate-700 italic">Optional Expansion</span>
+                             <span className="text-slate-500 italic">Required</span>
                           </div>
                        </div>
                     </div>
@@ -541,19 +541,19 @@ const App: React.FC = () => {
                     <div className="bg-blue-600/5 border border-blue-500/10 rounded-3xl p-8 flex flex-col justify-center">
                        <div className="flex items-center gap-3 mb-4">
                           <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
-                          <span className="text-[10px] font-black text-white uppercase tracking-widest">Global Edge Distribution</span>
+                          <span className="text-[10px] font-black text-white uppercase tracking-widest">Global Extraction</span>
                        </div>
                        <p className="text-xs text-slate-500 font-bold italic leading-relaxed mb-6">
-                         Once deployed, your app is accessible from any phone, tablet, or laptop. No local hardware is used for processing; everything happens in the cloud.
+                         Batch extract SKU and Description data from any PDF brand pricelist directly to Excel.
                        </p>
                        <div className="flex gap-4">
                           <div className="px-4 py-2 bg-slate-900 rounded-lg border border-white/5 flex items-center gap-2">
                              <Monitor className="w-3 h-3 text-slate-500" />
-                             <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Universal</span>
+                             <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Cross-Platform</span>
                           </div>
                           <div className="px-4 py-2 bg-slate-900 rounded-lg border border-white/5 flex items-center gap-2">
                              <Server className="w-3 h-3 text-slate-500" />
-                             <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Scaleable</span>
+                             <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Cloud Ready</span>
                           </div>
                        </div>
                     </div>
@@ -565,7 +565,7 @@ const App: React.FC = () => {
                   onClick={() => setActiveTab('main')}
                   className="px-12 py-5 bg-blue-600 hover:bg-blue-500 text-white rounded-[2rem] font-black text-xs uppercase tracking-[0.2em] transition-all shadow-2xl active:scale-95 flex items-center gap-3 mx-auto"
                  >
-                   Open Extractor Dashboard <ArrowRight className="w-4 h-4" />
+                   Return to Dashboard <ArrowRight className="w-4 h-4" />
                  </button>
               </div>
 
@@ -577,12 +577,12 @@ const App: React.FC = () => {
       <footer className="fixed bottom-0 left-0 right-0 py-2 h-10 border-t border-white/[0.03] bg-[#020305]/95 backdrop-blur-xl z-[100] pointer-events-none">
         <div className="max-w-[120rem] mx-auto h-full px-4 flex justify-between items-center text-[7px] font-black text-slate-700 uppercase tracking-widest">
            <div className="flex items-center gap-4">
-             <span>BatchCloud Protocol V3.5</span>
-             <span className="flex items-center gap-1"><Globe className="w-2 h-2" /> Hosted on Vercel Edge</span>
+             <span>BatchCloud Protocol V3.6</span>
+             <span className="flex items-center gap-1"><Globe className="w-2 h-2" /> Neural Engine Running</span>
            </div>
            <div className="flex gap-4">
               <span className={status === ExtractionStatus.PROCESSING ? 'text-emerald-500' : 'text-slate-700'}>
-                {status === ExtractionStatus.PROCESSING ? 'Neural Cloud Ingesting...' : 'System Latency: 42ms'}
+                {status === ExtractionStatus.PROCESSING ? 'Extracting SKU/DESC Data...' : 'System Idle'}
               </span>
            </div>
         </div>

@@ -9,19 +9,19 @@ const productSchema = {
     properties: {
       sku: {
         type: Type.STRING,
-        description: "The unique part number, SKU, or model ID. Must be captured with 100% character precision including special characters/hyphens.",
+        description: "The unique part number, SKU, or model ID. Extract exactly as written.",
       },
       description: {
         type: Type.STRING,
-        description: "Full product description. Merge related lines if the text wraps. Include size, color, or technical specs if present.",
+        description: "Full product name or description. Merge multiple lines if necessary.",
       },
       normalPrice: {
         type: Type.STRING,
-        description: "The base or standard price. Clean of currency symbols. Return empty string '' if absolutely missing.",
+        description: "The standard price value without currency symbols.",
       },
       specialPrice: {
         type: Type.STRING,
-        description: "The promotional, dealer, or sale price. Clean of currency symbols. Return empty string '' if absolutely missing.",
+        description: "The discounted or special price value without currency symbols.",
       },
     },
     required: ["sku", "description", "normalPrice", "specialPrice"],
@@ -30,46 +30,26 @@ const productSchema = {
 
 const delay = (ms: number) => new Promise(res => setTimeout(res, ms));
 
-/**
- * Retrieves a random API key from the environment variables to rotate requests.
- * Supports API_KEY, API_KEY_2, API_KEY_3, API_KEY_4, API_KEY_5
- */
-const getRotatingApiKey = (): string => {
-  const keys = [
-    process.env.API_KEY,
-    (process.env as any).API_KEY_2,
-    (process.env as any).API_KEY_3,
-    (process.env as any).API_KEY_4,
-    (process.env as any).API_KEY_5,
-  ].filter(Boolean);
-  
-  if (keys.length === 0) return process.env.API_KEY || '';
-  return keys[Math.floor(Math.random() * keys.length)];
-};
+const SYSTEM_INSTRUCTION = `You are a high-precision data extraction assistant. 
+Your task is to extract product information from images of price lists or catalogs.
 
-const SYSTEM_INSTRUCTION = `You are an elite, industrial-grade data extraction engine specializing in complex price lists and product catalogs.
-
-CRITICAL OPERATIONAL PROTOCOLS FOR MAXIMUM ACCURACY:
-1. HIGH-FIDELITY OCR: You must perform character-level validation on every SKU. Do not guess or auto-correct part numbers. Capture them exactly as visually rendered.
-2. TOTAL RECALL: Extract EVERY SINGLE product line item on the document. Zero omissions are tolerated.
-3. CONTEXTUAL MERGING: Product descriptions often span multiple vertical lines. You must intelligently merge these into a single coherent description string for the corresponding SKU.
-4. SPATIAL ALIGNMENT: Use the visual grid of the document to correctly associate Prices with their respective SKUs and Descriptions. Ensure columns are not mismatched.
-5. STRICT SEQUENTIAL ORDER: Process the document in a logical flow (typically top-to-bottom, left-to-right). The resulting JSON array must reflect this visual order.
-6. DATA SANITIZATION: 
-   - Prices: Remove currency symbols (e.g., $, R, £) but keep decimals.
-   - Missing Data: If a price field is empty or contains placeholders like 'N/A', '-', or 'TBA', return an empty string "". Never invent data.
-7. OUTPUT: Return ONLY a valid JSON array conforming to the provided schema.`;
+RULES:
+1. Extract EVERY product found on the page.
+2. SKU: Capture the product code or part number exactly.
+3. DESCRIPTION: Capture the full product description. If it spans multiple lines, join them with a space.
+4. PRICES: Extract prices as numbers (strings), removing any currency symbols like '$', 'R', or '£'. 
+5. If a price is missing, return an empty string "".
+6. Output MUST be a valid JSON array of objects.`;
 
 export async function extractProductsFromImage(
   base64Image: string,
   retryCount = 0
 ): Promise<Partial<Product>[]> {
-  const model = "gemini-3-pro-preview";
-  const MAX_RETRIES = 3;
+  const model = "gemini-3-flash-preview";
+  const MAX_RETRIES = 2;
   
-  // Use rotating key for each attempt to minimize 429 errors
-  const apiKey = getRotatingApiKey();
-  const ai = new GoogleGenAI({ apiKey });
+  // Directly use process.env.API_KEY as per guidelines
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   
   try {
     const response = await ai.models.generateContent({
@@ -83,7 +63,7 @@ export async function extractProductsFromImage(
                 data: base64Image,
               },
             },
-            { text: "EXTRACT ALL PRODUCT DATA WITH MAXIMUM PRECISION. Identify every line item, capture SKUs exactly, merge multi-line descriptions, and align prices correctly. Ensure NO items are missed. Return result as a JSON array." },
+            { text: "Extract all products from this page. Focus on SKU, Description, and Prices. Return as a JSON array." },
           ],
         },
       ],
@@ -96,13 +76,16 @@ export async function extractProductsFromImage(
     });
 
     const text = response.text;
-    if (!text) return [];
+    if (!text) {
+      console.warn("Empty response from Gemini");
+      return [];
+    }
     
     try {
       const parsed = JSON.parse(text);
       return Array.isArray(parsed) ? parsed : [];
     } catch (e) {
-      console.error("Failed to parse Gemini output:", text);
+      console.error("Failed to parse Gemini JSON output:", text);
       return [];
     }
   } catch (error: any) {
@@ -110,11 +93,12 @@ export async function extractProductsFromImage(
     const isRateLimit = error?.status === 429 || errorMsg.includes('429') || errorMsg.includes('quota');
     
     if (isRateLimit && retryCount < MAX_RETRIES) {
-      const waitTime = Math.pow(2, retryCount + 1) * 1000 + Math.random() * 500;
+      const waitTime = Math.pow(2, retryCount + 1) * 1000;
       await delay(waitTime);
       return extractProductsFromImage(base64Image, retryCount + 1);
     }
     
+    console.error("Gemini Extraction Error:", error);
     throw error;
   }
 }
@@ -125,8 +109,7 @@ export async function normalizeProductData(
 ): Promise<Partial<Product>[]> {
   const model = "gemini-3-flash-preview"; 
   const MAX_RETRIES = 2;
-  const apiKey = getRotatingApiKey();
-  const ai = new GoogleGenAI({ apiKey });
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
   try {
     const response = await ai.models.generateContent({
@@ -134,12 +117,12 @@ export async function normalizeProductData(
       contents: [
         {
           parts: [
-            { text: `Precisely normalize and format this batch of product data. Maintain strict order and data integrity: ${jsonText}` },
+            { text: `Precisely normalize this product data into SKU and Description format: ${jsonText}` },
           ],
         },
       ],
       config: {
-        systemInstruction: "Normalize product data for database ingestion. Ensure SKUs are preserved exactly and prices are sanitized to numerical strings. Return JSON array.",
+        systemInstruction: "Normalize the provided list into structured product JSON. Ensure SKUs and Descriptions are clean.",
         responseMimeType: "application/json",
         responseSchema: productSchema,
         temperature: 0,
@@ -151,7 +134,7 @@ export async function normalizeProductData(
     return JSON.parse(text);
   } catch (error: any) {
     if ((error?.status === 429) && retryCount < MAX_RETRIES) {
-      await delay(1000);
+      await delay(2000);
       return normalizeProductData(jsonText, retryCount + 1);
     }
     return [];
